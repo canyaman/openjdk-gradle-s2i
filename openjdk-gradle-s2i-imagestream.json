@@ -8,12 +8,12 @@
         "dockerImageRepository": "canyaman/openjdk-gradle-s2i",
         "tags": [
             {
-                "name": "1.0",
+                "name": "4.10.2",
                 "annotations": {
                     "description": "OpenJDK Gradle S2I images.",
                     "iconClass": "icon-spring",
                     "tags": "builder,java",
-                    "supports":"java:8,",
+                    "supports":"java:8,xpaas:1.0",
                     "sampleRepo": "https://github.com/canyaman/openjdk-gradle-s2i",
                     "sampleContextDir": "spring-boot-gradle",
                     "version": "1.0"
