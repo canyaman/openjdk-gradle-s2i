@@ -1,0 +1,32 @@
+{
+    "kind": "ImageStream",
+    "apiVersion": "v1",
+    "metadata": {
+        "name": "openjdk-gradle-s2i",
+        "annotations": {
+            "description": "ImageStream definition for Gradle OpenJDK 8.",
+            "openshift.io/display-name": "OpenJDK Gradle"
+        },
+        "namespace": "openshift"
+    },
+    "spec": {
+        "tags": [
+            {
+                "annotations": {
+                    "description": "OpenJDK Gradle S2I images.",
+                    "iconClass": "icon-openjdk",
+                    "openshift.io/display-name": "OpenJDK Gradle",
+                    "tags": "builder,java,spring,gradle,kotlin,xpaas,openjdk",
+                    "supports":"java:8,xpaas:1.0",
+                    "sampleRepo": "https://github.com/canyaman/spring-boot-gradle",
+                    "sampleContextDir": "spring-boot-gradle",
+                    "version": "1.0"
+                },
+                "name": "latest",
+                "referencePolicy": {
+                    "type": "Source"
+                }
+            }
+        ]
+    }
+}

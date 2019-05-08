@@ -11,6 +11,9 @@ SCRIPT_DIR="/usr/local/s2i"
 source "${SCRIPT_DIR}/s2i-setup"
 source "${SCRIPT_DIR}/common.sh"
 
+: ${JAVA_APP_JAR:=java-app.jar}
+export JAVA_APP_JAR
+
 # Gradle arguments setting up the environment
 GRADLE_CACHE="${HOME}/.gradle"
 
@@ -70,14 +73,47 @@ function copy_artifacts() {
 
     local cp_args=${ARTIFACT_COPY_ARGS}
     if [ x"${cp_args}" = x ]; then
-        if [ -d "hawt-app" ]; then
-            cp_args="-r hawt-app/*"
-        else
-            cp_args="*.jar"
-        fi
+      cp_args="*.jar"
     fi
     echo "Running: cp ${cp_args} ${dest}"
     cp ${cp_args} ${dest}
+}
+
+function runnable_actifact_file() {
+  local dir=$1
+
+  if [ x"${APP_FILE_NAME}" = x ]; then 
+      local number_of_jar_file=$(find $dir -type f -name "*.jar" | wc -l)
+      if [ number_of_jar_file = 1 ]; then
+        echo $(find $dir -type f -name "*.jar")
+      else 
+        echo $(find $dir -type f -name "${APP_BUILD_ARTIFACT}-${APP_BUILD_VERSION}.jar")
+      fi
+  else
+    echo $(find $dir -type f -name "${APP_FILE_NAME}")
+  fi
+}
+function rename_runnable_artifact_as() {
+    local dir=$1
+    local file=$2
+    local source=$(runnable_actifact_file $dir)
+    echo "Runnable actifact file is ${source}"
+
+    local target_artifact_file="${dir}/${file}"
+    echo "Rename actifact ${source} to ${target_artifact_file}"
+
+    if [ ! -f ${target_artifact_file} ]; then
+      echo "Running: mv ${source} ${target_artifact_file}"
+      mv ${source} ${target_artifact_file}
+    fi
+    echo "Artifact already exist ${target_artifact_file}"
+}
+
+function clean_directory() {
+    local dir=$1
+
+    echo "Cleaning directory ${dir} ..."
+    rm -Rf ${dir}/*
 }
 
 function build_gradle() {
@@ -87,37 +123,89 @@ function build_gradle() {
   # Where to put the artifacts
   local app_dir=$2
 
+  # Gradle home directory
+  local gradle_home=$(dirname $(dirname $(readlink -f $(which gradle))))
+  echo "Gradle path is ${gradle_home}"
+
   local jvm_option_file=/opt/run-java/java-default-options
   if [ -z "${GRADLE_OPTS}" -a -x "$jvm_option_file" ] ; then
     export GRADLE_OPTS="$($jvm_option_file)"
     echo "Setting GRADLE_OPTS to ${GRADLE_OPTS}"
   fi
+
+  echo "Setting GRADLE_ARGS to ${GRADLE_ARGS}"
   # Default args: no tests, if a module is specified, only assemble this module
   local gradle_args=${GRADLE_ARGS:-assemble}
 
   echo "Found build.gradle ... "
   local gradle_cmd="${gradle_args} -Djava.net.preferIPv4Stack=true ${GRADLE_ARGS_APPEND}"
-  echo "Running 'gradle ${gradle_cmd}'"
 
   local old_dir=$(pwd)
   cd ${S2I_SOURCE_DIR}
   check_error "changing directory to ${S2I_SOURCE_DIR}" $?
 
+  local gradle_exe=gradle
+
+  if [ -f "${S2I_SOURCE_DIR}/gradlew" ] && [[ ${GRADLEW} == "true" ]]; then
+    # =========
+    # Use Gradle Wrapper
+    echo "Gradle warrapper is detected."
+
+    # Gradle init script file
+    local init_gradle="${gradle_home}/init.d/init.gradle"
+
+    if [[ -f  ${init_gradle} ]]; then
+      echo "Init gradle file is ${init_gradle}'"
+      gradle_exe="./gradlew --init-script ${init_gradle} ${gradle_cmd}"
+    else
+      gradle_exe="./gradlew"
+    fi    
+  fi
   # =========
   # Run Gradle
-  gradle --version
-  gradle ${gradle_cmd}
-  check_error "Gradle build" $?
+  echo "Running '${gradle_exe} ${gradle_cmd}'"
+  echo "Gradle using ..."
+  
+  ${gradle_exe} --version
+  ${gradle_exe} ${gradle_cmd}
+  check_error "Gradle build" $?  
+
+  echo "S2I Gradle artifact directory"
+  ls -la $build_dir
 
   # ==============
   # Copy artifacts
   echo "Copying Gradle artifacts from ${build_dir} to ${app_dir} ..."
   copy_artifacts ${build_dir} ${app_dir}
   check_error "copying artifacts from ${build_dir} to ${app_dir}" $?
-
+  
+  echo "Clean build directory"
+  clean_directory "${S2I_SOURCE_DIR}/build"
 
 
   cd ${old_dir}
+}
+
+function restore_artifacts() {
+  echo "Check Cached S2I Artifacts"
+
+  # ==============
+  # Restore build artifacts
+  if [ -d  ${S2I_ARTIFACTS_DIR} ]; then
+      echo "Restoring files $(ls ${S2I_ARTIFACTS_DIR}/)"
+      if [[ -d "${S2I_ARTIFACTS_DIR}/.m2/repository/" ]]; then
+        echo "Restoring maven repositories ..."
+        mv ${S2I_ARTIFACTS_DIR}/.m2/repository $HOME/.m2
+      fi
+      if [[ -d "${S2I_ARTIFACTS_DIR}/.gradle/" ]]; then
+        echo "Restoring gradle from prior build ..."
+        mv ${S2I_ARTIFACTS_DIR}/.gradle/ $HOME/.gradle/
+      fi
+      if [[ -d "${S2I_ARTIFACTS_DIR}/.ivy2/" ]]; then
+        echo "Restoring ivy repositories ..."
+        mv ${S2I_ARTIFACTS_DIR}/.ivy2/ $HOME/.ivy2/
+      fi
+  fi
 }
 
 # =========================================================================
@@ -127,10 +215,17 @@ echo "=================================================================="
 echo "Starting S2I Java Build ....."
 build_dir=$(get_output_dir)
 check_error "Cannot get output dir: $build_dir" $?
+
+restore_artifacts
 if [ -f "${S2I_SOURCE_DIR}/build.gradle" ]; then
   echo "Gradle build detected"
   # If a buid.gradle is present use gradle
+  echo "Artifact directory is ${build_dir}"
+  echo "Deployment directory is ${DEPLOYMENTS_DIR}"
+  
+  clean_directory ${DEPLOYMENTS_DIR}
   build_gradle ${build_dir} ${DEPLOYMENTS_DIR}
+  rename_runnable_artifact_as ${DEPLOYMENTS_DIR} ${JAVA_APP_JAR}
 elif [ -f "${S2I_SOURCE_DIR}/Dockerfile" ]; then
   # This is a S2I binary build coming from fabric8-maven-plugin
   echo "S2I binary build from fabric8-maven-plugin detected"

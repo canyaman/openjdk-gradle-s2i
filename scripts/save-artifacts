@@ -1,0 +1,17 @@
+#!/bin/sh
+# ${HOME}/.m2 is the maven repo dir
+# ${HOME}/.gradle is the gradle cache and wrapper dir
+# ${HOME}/.ivy2 is the ivy2 repo dir
+echo "Saving S2I artifacts ..."
+
+pushd ${HOME} >/dev/null
+
+if [ -d ./.ivy2 ]; then
+    tar cf - ./.m2 ./.gradle ./.ivy2
+elif [ -d ./.gradle ]; then
+    tar cf - ./.m2 ./.gradle
+elif [ -d ./.m2 ]; then
+    tar cf - ./.m2
+fi
+
+popd >/dev/null

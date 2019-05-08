@@ -1,0 +1,27 @@
+kind: "BuildConfig"
+apiVersion: "v1"
+metadata:
+  name: "openjdk-gradle-s2i-build"
+  namespace: "openshift" 
+spec:
+  runPolicy: "Serial" 
+  triggers:
+    - type: "ImageChange"
+    - type: "ConfigChange"
+  source: 
+    git:
+      ref: master
+      uri: "https://github.com/canyaman/openjdk-gradle-s2i.git"
+    type: Git
+  strategy: 
+    dockerStrategy:
+      from:
+        kind: "ImageStreamTag"
+        name: "redhat-openjdk18-openshift:latest"
+      env:
+        - name: "GRADLE_VERSION"
+          value: "5.4.1"
+  output: 
+    to:
+      kind: "ImageStreamTag"
+      name: "openjdk-gradle-s2i:latest"

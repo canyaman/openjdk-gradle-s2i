@@ -1,0 +1,69 @@
+apply plugin:EnterpriseRepositoryPlugin
+
+allprojects {
+    buildscript {
+       repositories {
+            if (project.hasProperty("PRIVATE_PLUGIN_REPO_URL")) {
+                maven {
+                    name "PRIVATE_PLUGIN_REPOSITORY"
+                    url PRIVATE_PLUGIN_REPO_URL
+                }
+            }
+        }
+    }
+    repositories {
+        mavenLocal()
+        if (project.hasProperty("PRIVATE_MAVEN_REPO_URL")) {
+            maven {
+                name "PRIVATE_MAVEN_REPOSITORY"
+                url PRIVATE_MAVEN_REPO_URL
+            }
+        }
+    }
+}
+
+class EnterpriseRepositoryPlugin implements Plugin<Gradle> {
+
+    void apply(Gradle gradle) {
+        // ONLY USE ENTERPRISE REPO FOR DEPENDENCIES
+        gradle.allprojects{ project ->
+            if(project.hasProperty("ENTERPRISE_REPOSITORY_URL")){
+                project.logger.lifecycle "Enterprise repository plugin is activated for ${project}"
+                project.repositories {
+
+                    // Remove all repositories not pointing to the enterprise repository url
+                    all { ArtifactRepository repo ->
+                        println "Repo is:"+repo
+                        if (!(repo instanceof MavenArtifactRepository) ||
+                            repo.url.toString() != ENTERPRISE_REPOSITORY_URL) {
+                            project.logger.lifecycle "Repository ${repo.url} removed. Only $ENTERPRISE_REPOSITORY_URL is allowed"
+                            remove repo
+                        }
+                    }
+
+                    // add the enterprise repository
+                    maven {
+                        name "STANDARD_ENTERPRISE_REPO"
+                        url ENTERPRISE_REPOSITORY_URL
+                    }
+                }
+                project.buildscript.repositories {
+                    // Remove all repositories not pointing to the enterprise repository url
+                    all { ArtifactRepository repo ->
+                        if (!(repo instanceof MavenArtifactRepository) ||
+                            repo.url.toString() != ENTERPRISE_REPOSITORY_URL) {
+                            project.logger.lifecycle "Plugin repository ${repo.url} removed. Only $ENTERPRISE_REPOSITORY_URL is allowed"
+                            remove repo
+                        }
+                    }
+
+                    // add the enterprise repository
+                    maven {
+                        name "STANDARD_ENTERPRISE_REPO"
+                        url ENTERPRISE_REPOSITORY_URL
+                    }
+                }
+            }
+        }
+    }
+}
