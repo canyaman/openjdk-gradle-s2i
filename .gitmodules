@@ -1,4 +1,4 @@
 [submodule "test/test-app"]
 	path = test/test-app
-	url = git@github.com:canyaman/spring-boot-gradle.git
+	url = https://github.com/canyaman/spring-boot-gradle.git
 	branch = master
